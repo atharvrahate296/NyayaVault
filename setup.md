@@ -66,7 +66,7 @@ DEBUG=true
 SECRET_KEY=nyayavault-dev-secret-change-in-production-minimum-32-chars
 
 # Relational Database (Supabase PostgreSQL)
-DATABASE_URL=postgresql+asyncpg://<username>:<password>@<db-host>:5432/<database-name>
+DATABASE_URL=postgresql+asyncpg://<username>:<password>@<pooler-host>:6543/<database-name>
 
 
 # JWT Secrets
@@ -258,7 +258,7 @@ Expected response:
 {"status": "UP", "database": "CONNECTED", "url_type": "postgresql+asyncpg"}
 ```
 
-> **Note:** The backend seeds additional demo users and sample case data automatically on first startup.
+> **Note:** The backend does not seed data on startup. Run `python seed.py` manually from `backend/` when demo data is required.
 
 ---
 
@@ -359,7 +359,7 @@ npm run dev
 
 ## 7. Default Application & Service Credentials
 
-### User Role Accounts (Auto-seeded on first startup)
+### User Role Accounts (Provisioned explicitly)
 
 | Role | Email | Password |
 |---|---|---|
@@ -368,7 +368,7 @@ npm run dev
 | **Forensic Staff** | `forensics@nyayavault.gov.in` | `NyayaVault@2026` |
 | **Senior Officer** | `senior@nyayavault.gov.in` | `NyayaVault@2026` |
 
-> The admin account is seeded by `supabase_bootstrap.sql`. The remaining three accounts are seeded by the Python backend on first startup.
+> The administrator is created by `supabase_bootstrap.sql`. The remaining demo accounts are added only when an operator runs `python seed.py` from `backend/`.
 
 ### Infrastructure Credentials
 

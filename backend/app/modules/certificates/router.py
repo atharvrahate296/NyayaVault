@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, record_audit_log, require_permission
+from app.config.settings import settings
 from app.core.exceptions.handlers import ResourceNotFoundException, IntegrityMismatchException
 from app.db.models import Certificate, Document, DocumentVersion, IntegrityRecord, BlockchainTransaction, Case, User
 from app.modules.certificates.schemas import CertificateCreateRequest, CertificateResponse
@@ -82,7 +83,12 @@ async def generate_certificate(
     )
 
     cert_storage_key = f"certificates/{cert_num}.pdf"
-    await storage_service.save_file(pdf_bytes, cert_storage_key)
+    await storage_service.save_file(
+        pdf_bytes,
+        cert_storage_key,
+        content_type="application/pdf",
+        metadata={"certificate_number": cert_num, "canonical": "false"},
+    )
 
     cert = Certificate(
         certificate_number=cert_num,
@@ -127,21 +133,48 @@ async def download_certificate(
             raise ResourceNotFoundException("Certificate", certificate_id)
 
     pdf_bytes = await storage_service.read_file(cert.file_storage_key)
-    if not pdf_bytes:
-        # Generate on the fly
-        pdf_bytes = CertificateService.generate_section_65b_pdf(
-            cert_number=cert.certificate_number,
-            case_number="CASE-REF",
-            doc_title="Verified Record",
-            sha256_hash=cert.verification_hash,
-            officer_name=current_user.full_name,
-            department=current_user.department,
-            blockchain_tx="0x7f4a...0123",
-            timestamp=datetime.now(timezone.utc).strftime("%d-%b-%Y %H:%M:%S UTC"),
-        )
+    if pdf_bytes is None:
+        raise HTTPException(status_code=404, detail="Certificate object is missing from storage.")
 
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{cert.certificate_number}.pdf"'},
     )
+
+@router.get("/{certificate_id}/download-url")
+async def create_certificate_download_url(
+    certificate_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("download")),
+):
+    res = await db.execute(select(Certificate).filter_by(id=certificate_id))
+    cert = res.scalars().first()
+    if not cert:
+        res = await db.execute(select(Certificate).filter_by(certificate_number=certificate_id))
+        cert = res.scalars().first()
+    if not cert:
+        raise ResourceNotFoundException("Certificate", certificate_id)
+
+    url = await storage_service.create_download_url(
+        cert.file_storage_key,
+        f"{cert.certificate_number}.pdf",
+        "application/pdf",
+    )
+    await record_audit_log(
+        db=db,
+        actor_id=current_user.id,
+        actor_role=current_user.role,
+        action="CERTIFICATE_DOWNLOAD_URL_CREATED",
+        resource_type="certificate",
+        resource_id=cert.certificate_number,
+        case_id=cert.case_id,
+        result="SUCCESS",
+        metadata={"file_name": f"{cert.certificate_number}.pdf"},
+    )
+    await db.commit()
+    return {
+        "url": url,
+        "expires_in": settings.STORAGE_PRESIGNED_URL_TTL,
+        "file_name": f"{cert.certificate_number}.pdf",
+    }

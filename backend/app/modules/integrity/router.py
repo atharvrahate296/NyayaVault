@@ -67,8 +67,8 @@ async def verify_integrity(
 
     # Read current bytes from storage
     current_bytes = await storage_service.read_file(ver.storage_key)
-    if not current_bytes:
-        current_bytes = f"NYAYAVAULT SECURE DOCUMENT {ver.file_name}\nSHA256: {ver.sha256_hash}".encode()
+    if current_bytes is None:
+        raise HTTPException(status_code=404, detail="Document object is missing from storage.")
 
     calculated_hash = hashlib.sha256(current_bytes).hexdigest()
     matched = (calculated_hash == ver.sha256_hash) and (not int_rec.is_tampered_simulated if int_rec else True)
@@ -159,8 +159,8 @@ async def simulate_tamper(
     # Tamper file bytes
     try:
         new_hash = await storage_service.simulate_tamper(ver.storage_key)
-    except Exception:
-        new_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     if int_rec:
         int_rec.is_tampered_simulated = True
@@ -206,8 +206,15 @@ async def restore_tamper(
     # Restore file bytes
     try:
         restored_hash = await storage_service.restore_tamper(ver.storage_key)
-    except Exception:
-        restored_hash = ver.sha256_hash
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    if restored_hash != ver.sha256_hash:
+        raise IntegrityMismatchException(
+            original_hash=ver.sha256_hash,
+            calculated_hash=restored_hash,
+            message="Canonical storage object does not match the registered document hash.",
+        )
 
     if int_rec:
         int_rec.is_tampered_simulated = False

@@ -55,10 +55,10 @@ Nyayavault/
 │   ├── vite.config.js            # Vite build configuration
 │   └── Dockerfile                # Frontend container configuration
 │
-├── backend/                      # Python 3.11+ FastAPI + SQLAlchemy + PostgreSQL + MinIO + Qdrant
+├── backend/                      # Python FastAPI + SQLAlchemy + Supabase PostgreSQL + MinIO + Qdrant
 
 │   ├── app/
-│   │   ├── main.py               # FastAPI entrypoint, CORS, lifespan startup & DB seed
+│   │   ├── main.py               # FastAPI entrypoint, CORS, and lifespan startup
 │   │   ├── config/               # Pydantic Settings & environment config
 │   │   ├── core/                 # JWT security, password hashing, RBAC, exceptions
 │   │   ├── db/                   # Async SQLAlchemy engine, models, and seed data
@@ -70,7 +70,7 @@ Nyayavault/
 │   │   │   ├── policies/         # ABAC policy evaluation engine
 │   │   │   ├── cases/            # Case management & officer assignments
 │   │   │   ├── documents/        # File upload, versioning, secure download
-│   │   │   ├── storage/          # MinIO/S3 private storage & local filesystem provider
+│   │   │   ├── storage/          # MinIO/S3 private object storage
 │   │   │   ├── integrity/        # SHA-256 verification, tamper simulation & restoration
 │   │   │   ├── blockchain/       # Hyperledger Fabric transaction recording & ledger
 │   │   │   ├── ai/               # OCR, classification, entity extraction & human review
@@ -88,9 +88,10 @@ Nyayavault/
 │   │   └── integrations/         # CCTNS, e-Courts, and DigiLocker gateways
 │   ├── tests/                    # Pytest test suite covering core workflows
 │   ├── requirements.txt          # Python backend dependencies
-│   └── Dockerfile                # Backend container configuration
+│   ├── Dockerfile                # Backend container configuration
 │
-├── docker-compose.yml            # Orchestration for Frontend, Backend, Postgres, and MinIO
+├── docker-compose.yml            # Orchestration for Frontend, Backend, MinIO, Qdrant, and Redis
+├── RUNNING.md                    # Complete setup, run, verification, and troubleshooting guide
 ├── .gitignore                    # Git ignore rules for Python, Node, SQLite, and env
 ├── Nyayavault - PRD.md           # Product Requirement Document
 └── Nyayavault Backend Technical - PRD.md # Backend Technical Architecture Specification
@@ -102,10 +103,12 @@ Nyayavault/
 
 ### Option A: Run via Docker Compose (Recommended)
 
-Spins up the full stack including Frontend, Backend, PostgreSQL, and MinIO S3 Object Storage:
+Spins up the frontend, backend, MinIO S3-compatible object storage, Qdrant, and Redis. PostgreSQL is hosted by Supabase and is configured through `backend/.env`.
+
+For the complete setup and troubleshooting instructions, see [RUNNING.md](RUNNING.md).
 
 ```bash
-docker-compose up --build
+docker compose up --build -d
 ```
 
 - **Frontend UI:** `http://localhost:5173`
@@ -113,6 +116,20 @@ docker-compose up --build
 - **Interactive Swagger Docs:** `http://localhost:8000/docs`
 - **Interactive ReDoc:** `http://localhost:8000/redoc`
 - **MinIO Console:** `http://localhost:9001` (User: `minioadmin` / Pass: `minioadmin`)
+- **Qdrant Dashboard:** `http://localhost:6333/dashboard`
+
+Check the stack with:
+
+```bash
+docker compose ps
+docker compose logs -f backend
+```
+
+Stop it with:
+
+```bash
+docker compose down
+```
 
 ---
 
@@ -138,7 +155,7 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 > **Database provisioning is explicit:**  
-> The backend does not create tables or seed users when it starts. For Supabase, run [`backend/supabase_bootstrap.sql`](backend/supabase_bootstrap.sql) in the Supabase SQL Editor first. For local SQLite development, the test fixture provisions its isolated database explicitly.
+> The backend does not create tables or seed users when it starts. Run [`backend/supabase_bootstrap.sql`](backend/supabase_bootstrap.sql) in the Supabase SQL Editor first. Tests must use a separate isolated PostgreSQL database through `TEST_DATABASE_URL`.
 
 #### 2. Run Backend Tests
 

@@ -28,6 +28,7 @@ from app.db.models import (
 )
 from app.core.security.hashing import get_password_hash, compute_sha256
 from app.core.security.rbac import RoleEnum, PermissionEnum, ROLE_PERMISSIONS_MAP
+from app.config.settings import settings as app_settings
 
 logger = logging.getLogger("nyayavault.init_db")
 
@@ -136,8 +137,8 @@ async def seed_demo_dataset(db: AsyncSession):
             db.add(StorageObject(
                 id=storage_id,
                 version_id=version_id,
-                storage_provider="local",
-                bucket="nyayavault-documents",
+                storage_provider=app_settings.STORAGE_PROVIDER,
+                bucket=app_settings.STORAGE_BUCKET,
                 storage_key=storage_key,
                 file_size=file_size,
                 is_tampered_simulated=False,
@@ -464,8 +465,8 @@ async def seed_db(db: AsyncSession):
     storage_obj = StorageObject(
         id="sto_001",
         version_id="ver_001",
-        storage_provider="local",
-        bucket="nyayavault-documents",
+        storage_provider=app_settings.STORAGE_PROVIDER,
+        bucket=app_settings.STORAGE_BUCKET,
         storage_key="cases/case_mh_01428/documents/doc_fir_001/versions/ver_001/FIR_01428_CyberFraud.pdf",
         file_size=len(sample_content),
         is_tampered_simulated=False,

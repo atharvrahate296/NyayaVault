@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config.settings import settings
 from app.db.session import get_db
 from app.integrations.qdrant_client import qdrant_service
+from app.modules.storage.service import storage_service
 
 
 router = APIRouter(prefix="/health", tags=["Observability & Health Checks"])
@@ -43,8 +44,9 @@ async def database_health(db: AsyncSession = Depends(get_db)):
 
 @router.get("/storage")
 async def storage_health():
+    is_available = await storage_service.check_health()
     return {
-        "status": "UP",
+        "status": "UP" if is_available else "DOWN",
         "provider": settings.STORAGE_PROVIDER,
         "bucket": settings.STORAGE_BUCKET,
     }

@@ -27,9 +27,13 @@ services:
       - DEBUG=true
       - STORAGE_PROVIDER=minio
       - STORAGE_ENDPOINT=http://minio:9000
+      - STORAGE_PUBLIC_ENDPOINT=http://localhost:9000
       - STORAGE_ACCESS_KEY=minioadmin
       - STORAGE_SECRET_KEY=minioadmin
       - STORAGE_BUCKET=nyayavault-documents
+      - STORAGE_BACKUP_BUCKET=nyayavault-canonical
+      - STORAGE_ADDRESSING_STYLE=path
+      - STORAGE_CREATE_BUCKET=false
       - BLOCKCHAIN_NETWORK=hyperledger-fabric
       - QDRANT_URL=http://qdrant:6333
       - QDRANT_API_KEY=
@@ -41,8 +45,6 @@ services:
         condition: service_started
       redis:
         condition: service_started
-    volumes:
-      - ./backend/storage_data:/app/storage_data
     env_file:
       - ./backend/.env
 
@@ -59,6 +61,18 @@ services:
       - "9001:9001"
     volumes:
       - minio_data:/data
+
+  # Create the application bucket outside the FastAPI startup lifecycle.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: /bin/sh
+    command: >-
+      -c "until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 1; done;
+      mc mb --ignore-existing local/nyayavault-documents;
+      mc mb --ignore-existing local/nyayavault-canonical"
 
   # 4. Vector Database: Qdrant
   qdrant:

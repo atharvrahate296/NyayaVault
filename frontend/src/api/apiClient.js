@@ -133,6 +133,8 @@ export const api = {
     }),
   downloadDocument: (id, versionId = null) =>
     request(`/documents/${id}/download${versionId ? `?version_id=${versionId}` : ''}`),
+  createDocumentDownloadUrl: (id, versionId = null) =>
+    request(`/documents/${id}/download-url${versionId ? `?version_id=${versionId}` : ''}`),
 
   // 4. Integrity & Blockchain
   getIntegrity: (versionId) => request(`/integrity/${versionId}`),
@@ -174,6 +176,7 @@ export const api = {
       body: JSON.stringify(certData),
     }),
   downloadCertificate: (certId) => request(`/certificates/${certId}/download`),
+  createCertificateDownloadUrl: (certId) => request(`/certificates/${certId}/download-url`),
 
   // 7. AI & Search
   search: (q, mode = 'hybrid', filters = {}) => {

@@ -228,12 +228,23 @@ CREATE INDEX IF NOT EXISTS idx_doc_versions_sha256      ON document_versions (sh
 CREATE TABLE IF NOT EXISTS storage_objects (
     id                   VARCHAR(36)  PRIMARY KEY,
     version_id           VARCHAR(36)  NOT NULL UNIQUE REFERENCES document_versions(id) ON DELETE CASCADE,
-    storage_provider     VARCHAR(32)  NOT NULL DEFAULT 'local',
+    storage_provider     VARCHAR(32)  NOT NULL DEFAULT 'minio',
     bucket               VARCHAR(128) NOT NULL,
     storage_key          VARCHAR(512) NOT NULL,
+    canonical_bucket     VARCHAR(128),
+    canonical_key        VARCHAR(512),
+    etag                 VARCHAR(128),
+    object_version_id    VARCHAR(256),
+    mime_type            VARCHAR(128),
     file_size            INTEGER      NOT NULL,
     is_tampered_simulated BOOLEAN     NOT NULL DEFAULT FALSE
 );
+
+ALTER TABLE storage_objects ADD COLUMN IF NOT EXISTS canonical_bucket VARCHAR(128);
+ALTER TABLE storage_objects ADD COLUMN IF NOT EXISTS canonical_key VARCHAR(512);
+ALTER TABLE storage_objects ADD COLUMN IF NOT EXISTS etag VARCHAR(128);
+ALTER TABLE storage_objects ADD COLUMN IF NOT EXISTS object_version_id VARCHAR(256);
+ALTER TABLE storage_objects ADD COLUMN IF NOT EXISTS mime_type VARCHAR(128);
 
 -- ---------------------------------------------------------------------------
 -- 4. AI / OCR & Processing
@@ -628,8 +639,8 @@ ON CONFLICT (email) DO UPDATE SET
 -- END OF BOOTSTRAP SCRIPT
 -- =============================================================================
 -- After running this script:
---   1. Start the FastAPI backend — it will auto-seed additional demo users and
---      sample case data on first startup via app/db/init_db.py:seed_db().
+--   1. Optionally run `python seed.py` from the backend directory to add demo
+--      users and sample case data. The FastAPI backend does not seed on startup.
 --   2. Verify connectivity at GET /api/v1/health/db
 --   3. Login at POST /api/v1/auth/login with the admin credentials above.
 -- =============================================================================

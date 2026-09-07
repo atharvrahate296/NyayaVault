@@ -33,13 +33,19 @@ class Settings(BaseSettings):
 
     # Object Storage (MinIO / S3)
     STORAGE_PROVIDER: str = "minio"  # "minio" or "s3"
-    STORAGE_ENDPOINT: str = "http://localhost:9000"
+    STORAGE_ENDPOINT: Optional[str] = "http://localhost:9000"
+    STORAGE_PUBLIC_ENDPOINT: Optional[str] = None
     STORAGE_ACCESS_KEY: str = "minioadmin"
     STORAGE_SECRET_KEY: str = "minioadmin"
     STORAGE_BUCKET: str = "nyayavault-documents"
+    STORAGE_BACKUP_BUCKET: str = "nyayavault-canonical"
     STORAGE_REGION: str = "us-east-1"
     STORAGE_SECURE: bool = False
-    STORAGE_LOCAL_DIR: str = "./storage_data"
+    STORAGE_ADDRESSING_STYLE: str = "path"  # "path" for MinIO, "virtual" for AWS S3
+    STORAGE_CREATE_BUCKET: bool = False
+    STORAGE_PRESIGNED_URL_TTL: int = 300
+    STORAGE_SSE: Optional[str] = None  # "AES256" or "aws:kms"
+    STORAGE_KMS_KEY_ID: Optional[str] = None
 
 
 

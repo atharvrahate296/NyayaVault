@@ -38,6 +38,7 @@ from app.modules.documents.schemas import (
     DocumentVersionResponse,
     DocumentUpdate,
 )
+from app.config.settings import settings
 from app.modules.storage.service import storage_service
 from app.workers.async_tasks import process_document_pipeline
 
@@ -137,7 +138,13 @@ async def upload_document(
     storage_key = f"cases/{case_id}/documents/{doc_id}/versions/{ver_id}/{filename}"
 
     # 1. Save to secure storage & compute SHA-256
-    s_key, size, sha256_hash = await storage_service.save_file(content, storage_key)
+    mime_type = file.content_type or "application/octet-stream"
+    s_key, size, sha256_hash = await storage_service.save_file(
+        content,
+        storage_key,
+        content_type=mime_type,
+        metadata={"document_id": doc_id, "version_id": ver_id},
+    )
 
     # 2. Persist Document & Version records
     new_doc = Document(
@@ -162,7 +169,7 @@ async def upload_document(
         sha256_hash=sha256_hash,
         file_name=filename,
         file_size=size,
-        mime_type=file.content_type or "application/octet-stream",
+        mime_type=mime_type,
         created_by=current_user.id,
         change_reason="Initial upload",
         status="ACTIVE",
@@ -171,9 +178,12 @@ async def upload_document(
 
     storage_obj = StorageObject(
         version_id=ver_id,
-        storage_provider="local",
-        bucket="nyayavault-documents",
+        storage_provider=settings.STORAGE_PROVIDER,
+        bucket=settings.STORAGE_BUCKET,
         storage_key=s_key,
+        canonical_bucket=settings.STORAGE_BACKUP_BUCKET,
+        canonical_key=s_key,
+        mime_type=file.content_type or "application/pdf",
         file_size=size,
         is_tampered_simulated=False,
     )
@@ -257,7 +267,13 @@ async def create_document_version(
     filename = file.filename or f"doc_{document_id}_v{next_ver_num}.pdf"
     storage_key = f"cases/{doc.case_id}/documents/{document_id}/versions/{ver_id}/{filename}"
 
-    s_key, size, sha256_hash = await storage_service.save_file(content, storage_key)
+    mime_type = file.content_type or "application/pdf"
+    s_key, size, sha256_hash = await storage_service.save_file(
+        content,
+        storage_key,
+        content_type=mime_type,
+        metadata={"document_id": document_id, "version_id": ver_id},
+    )
 
     new_ver = DocumentVersion(
         id=ver_id,
@@ -267,7 +283,7 @@ async def create_document_version(
         sha256_hash=sha256_hash,
         file_name=filename,
         file_size=size,
-        mime_type=file.content_type or "application/pdf",
+        mime_type=mime_type,
         created_by=current_user.id,
         change_reason=change_reason,
         status="ACTIVE",
@@ -349,9 +365,8 @@ async def download_document(
         raise ResourceNotFoundException("DocumentVersion", target_ver_id)
 
     bytes_data = await storage_service.read_file(ver.storage_key)
-    if not bytes_data:
-        # Fallback generated dummy content
-        bytes_data = f"NYAYAVAULT SECURE DOCUMENT {doc.title}\nSHA256: {ver.sha256_hash}".encode()
+    if bytes_data is None:
+        raise HTTPException(status_code=404, detail="Document object is missing from storage.")
 
     await record_audit_log(
         db=db,
@@ -371,3 +386,38 @@ async def download_document(
         media_type=ver.mime_type,
         headers={"Content-Disposition": f'attachment; filename="{ver.file_name}"'},
     )
+
+@router.get("/{document_id}/download-url")
+async def create_document_download_url(
+    document_id: str,
+    version_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("download")),
+):
+    doc_res = await db.execute(select(Document).filter_by(id=document_id))
+    doc = doc_res.scalars().first()
+    if not doc:
+        raise ResourceNotFoundException("Document", document_id)
+    if doc.classification == "Top Secret" and current_user.clearance_level != "Level 4":
+        raise AccessDeniedException("Top Secret document requires Level 4 clearance.")
+
+    target_ver_id = version_id or doc.current_version_id
+    ver_res = await db.execute(select(DocumentVersion).filter_by(id=target_ver_id))
+    ver = ver_res.scalars().first()
+    if not ver:
+        raise ResourceNotFoundException("DocumentVersion", target_ver_id)
+
+    url = await storage_service.create_download_url(ver.storage_key, ver.file_name, ver.mime_type)
+    await record_audit_log(
+        db=db,
+        actor_id=current_user.id,
+        actor_role=current_user.role,
+        action="DOCUMENT_DOWNLOAD_URL_CREATED",
+        resource_type="document",
+        resource_id=document_id,
+        case_id=doc.case_id,
+        result="SUCCESS",
+        metadata={"version_id": target_ver_id, "file_name": ver.file_name},
+    )
+    await db.commit()
+    return {"url": url, "expires_in": settings.STORAGE_PRESIGNED_URL_TTL, "file_name": ver.file_name}
